@@ -37,8 +37,7 @@ def create_task(request):
     except Exception as e:
         return Response(
             {"status": "error", "message": str(e)},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+            status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def get_tasks(request):
@@ -53,8 +52,7 @@ def get_tasks(request):
     except Exception as e:
         return Response(
             {"status": "error", "message": str(e)},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+            status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 def update_task(request):
@@ -78,17 +76,22 @@ def update_task(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    task = Task.objects.get(id=task_id)
-    task.title = title
-    task.description = description
-    task.completed = completed
-    task.save()
+    try:
+        task = Task.objects.get(id=task_id)
+        task.title = title
+        task.description = description
+        task.completed = completed
+        task.save()
 
-    return Response({
-        "status": "success",
-        "message": "Task updated successfully",
-        "data": TaskModelSerializer(task).data
-    }, status=status.HTTP_200_OK)
+        return Response({
+            "status": "success",
+            "message": "Task updated successfully",
+            "data": TaskModelSerializer(task).data
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {"status": "error", "message": str(e)},
+            status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 def delete_task(request):
@@ -108,11 +111,15 @@ def delete_task(request):
             {"status": "error", "message": "Task not found"},
             status=status.HTTP_404_NOT_FOUND
         )
+    try:
+        task = Task.objects.get(id=task_id)
+        task.delete()
 
-    task = Task.objects.get(id=task_id)
-    task.delete()
-
-    return Response({
-        "status": "success",
-        "message": "Task deleted successfully"
-    }, status=status.HTTP_200_OK)
+        return Response({
+            "status": "success",
+            "message": "Task deleted successfully"
+            }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {"status": "error", "message": str(e)},
+            status=status.HTTP_400_BAD_REQUEST)
