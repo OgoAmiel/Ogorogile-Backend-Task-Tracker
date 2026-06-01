@@ -1,0 +1,227 @@
+from django.shortcuts import render
+from django.core.exceptions import ValidationError
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from user_management.api_helpers.user_helpers import (create_user_helper, update_user_helper, delete_user_helper,
+                                                    assign_manager, update_assign_manager)
+from user_management.models import UserRole
+from user_management.serializers.base_serilaizers import CreateUserSerializer, UpdateUserSerializer, DeleteUserSerializer, User
+from user_management.serializers.model_serializers import CurrentUserSerializer, UserReadSerializer
+
+# Create your views here.
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_user(request):
+    serializer = CurrentUserSerializer(request.user)
+
+    return Response({
+        "status": "success",
+        "message": "Current user retrieved successfully",
+        "data": serializer.data,},
+        status=status.HTTP_200_OK,)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_user(request):
+    serializer = CreateUserSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "status": "error",
+            "message": serializer.errors,},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    username = serializer.validated_data.get("username")
+    first_name = serializer.validated_data.get("first_name")
+    last_name = serializer.validated_data.get("last_name")
+    email = serializer.validated_data.get("email", "").strip()
+    password = serializer.validated_data.get("password")
+    role = serializer.validated_data.get("role")
+    employee_number = serializer.validated_data.get("employee_number")
+    department = serializer.validated_data.get("department", "").strip()
+    manager_id = serializer.validated_data.get("manager_id")
+    is_active = serializer.validated_data.get("is_active", True)
+
+    if username and User.objects.filter(username=username).exists():
+        return Response({
+            "status": "error",
+            "message": "A user with this username already exists.",
+            }, status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if employee_number and User.objects.filter(employee_number=employee_number).exists():
+        return Response({
+            "status": "error",
+            "message": "A user with this employee number already exists.",
+            }, status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        manager = assign_manager(role=role, manager_id=manager_id)
+    except ValidationError as e:
+        return Response({
+            "status": "error",
+            "message": e.message_dict,
+            }, status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        user = create_user_helper(
+            request_user=request.user,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            password=password,
+            role=role,
+            employee_number=employee_number,
+            department=department,
+            manager=manager,
+            is_active=is_active,
+        )
+
+        return Response({
+            "status": "success",
+            "message": "User created successfully",
+            "data": UserReadSerializer(user).data,},
+            status=status.HTTP_201_CREATED,
+        )
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e),},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_users(request):
+    if request.user.role != UserRole.ADMIN:
+        return Response({
+            "status": "error",
+            "message": ["Only admins can view users."],
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    users = User.objects.select_related("manager").all()
+    serializer = UserReadSerializer(users, many=True)
+
+    return Response({
+        "status": "success",
+        "message": "Users retrieved successfully",
+        "data": serializer.data,},
+        status=status.HTTP_200_OK,)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def update_user(request):
+    serializer = UpdateUserSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "status": "error",
+            "message": serializer.errors,},
+            status=status.HTTP_400_BAD_REQUEST,)
+
+    user_id = serializer.validated_data.get("user_id")
+
+    try:
+        target_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({
+            "status": "error",
+            "message": "Selected user does not exist."
+            },status=status.HTTP_400_BAD_REQUEST,)
+
+    first_name = serializer.validated_data.get("first_name")
+    last_name = serializer.validated_data.get("last_name")
+    email = serializer.validated_data.get("email", "")
+    role = serializer.validated_data.get("role")
+    employee_number = serializer.validated_data.get("employee_number")
+    department = serializer.validated_data.get("department", "").strip()
+    manager_id = serializer.validated_data.get("manager_id")
+    is_active = serializer.validated_data.get("is_active", target_user.is_active)
+
+    try:
+        manager = update_assign_manager(target_user=target_user, role=role, manager_id=manager_id)
+    except ValidationError as e:
+        return Response({
+            "status": "error",
+            "message": e.message_dict,
+            }, status=status.HTTP_400_BAD_REQUEST,)
+
+    if employee_number and User.objects.filter(employee_number=employee_number).exclude(id=target_user.id).exists():
+        return Response({
+            "status": "error",
+            "message": "A user with this employee number already exists."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        updated_user = update_user_helper(
+            request_user=request.user,
+            target_user=target_user,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            role=role,
+            employee_number=employee_number,
+            department=department,
+            manager=manager,
+            is_active=is_active,
+        )
+
+        return Response({
+            "status": "success",
+            "message": "User updated successfully",
+            "data": UserReadSerializer(updated_user).data,},
+            status=status.HTTP_200_OK,
+            )
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e),},
+            status=status.HTTP_400_BAD_REQUEST,)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def delete_user(request):
+    serializer = DeleteUserSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "status": "error",
+            "message": serializer.errors,},
+            status=status.HTTP_400_BAD_REQUEST,)
+
+    user_id = serializer.validated_data.get("user_id")
+
+    try:
+        target_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({
+            "status": "error",
+            "message": "Selected user does not exist.",},
+            status=status.HTTP_404_NOT_FOUND,)
+
+    try:
+        delete_user_helper(
+            request_user=request.user,
+            target_user=target_user,
+        )
+
+        return Response({
+            "status": "success",
+            "message": "User deleted successfully",},
+            status=status.HTTP_200_OK,
+            )
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e),},
+            status=status.HTTP_400_BAD_REQUEST,)
