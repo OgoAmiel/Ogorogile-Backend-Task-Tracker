@@ -4,11 +4,14 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from task_management.models import Task
+from user_management.models import User
 
 
 class CreateTaskAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.client.force_authenticate(user=self.user)
         self.url = reverse('create_task')
         self.valid_payload = {
             'title': 'Write unit tests',
@@ -45,6 +48,8 @@ class CreateTaskAPITest(TestCase):
 class GetTasksAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = User.objects.create_user(username='testuser4', password='testpass4')
+        self.client.force_authenticate(user=self.user)
         self.url = reverse('get_tasks')
 
     def test_get_tasks_when_none_exist(self):
@@ -57,8 +62,8 @@ class GetTasksAPITest(TestCase):
 
     def test_get_tasks_when_tasks_exist(self):
         # Create some tasks
-        Task.objects.create(title='Task 1', description='First task', completed=False)
-        Task.objects.create(title='Task 2', description='Second task', completed=True)
+        Task.objects.create(owner=self.user, title='Task 1', description='First task', completed=False)
+        Task.objects.create(owner=self.user, title='Task 2', description='Second task', completed=True)
 
         response = self.client.get(self.url)
 
@@ -75,8 +80,11 @@ class GetTasksAPITest(TestCase):
 class UpdateTaskAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = User.objects.create_user(username='testuser2', password='testpass2')
+        self.client.force_authenticate(user=self.user)
         self.url = reverse('update_task')
         self.task = Task.objects.create(
+            owner=self.user,
             title='Original Title',
             description='Original Description',
             completed=False
@@ -125,8 +133,11 @@ class UpdateTaskAPITest(TestCase):
 class DeleteTaskAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = User.objects.create_user(username='testuser3', password='testpass3')
+        self.client.force_authenticate(user=self.user)
         self.url = reverse('delete_task')
         self.task = Task.objects.create(
+            owner=self.user,
             title='Task to Delete',
             description='This will be deleted',
             completed=False

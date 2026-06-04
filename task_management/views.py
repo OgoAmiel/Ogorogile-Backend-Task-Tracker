@@ -1,5 +1,6 @@
 from django.shortcuts import render
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -10,6 +11,7 @@ from task_management.serializers.model_serializer import TaskModelSerializer
 
 # Create your views here.
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_task(request):
     serializer = TaskBaseSerializer(data=request.data)
 
@@ -25,6 +27,7 @@ def create_task(request):
 
     try:
         task = Task.objects.create(
+            owner=request.user,
             title=title,
             description=description,
             completed=completed
@@ -40,9 +43,10 @@ def create_task(request):
             status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_tasks(request):
     try:
-        qs = Task.objects.all()
+        qs = Task.objects.filter(owner=request.user)
         serializer = TaskModelSerializer(qs, many=True)
         return Response({
             "status": "success",
@@ -55,6 +59,7 @@ def get_tasks(request):
             status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def update_task(request):
     serializer = TaskUpdateSerializer(data=request.data)
 
@@ -69,7 +74,7 @@ def update_task(request):
     description = serializer.validated_data.get('description')
     completed = serializer.validated_data.get('completed')
 
-    task_exists = Task.objects.filter(id=task_id).exists()
+    task_exists = Task.objects.filter(id=task_id, owner=request.user).exists()
     if not task_exists:
         return Response(
             {"status": "error", "message": "Task not found"},
@@ -77,7 +82,7 @@ def update_task(request):
         )
 
     try:
-        task = Task.objects.get(id=task_id)
+        task = Task.objects.get(id=task_id, owner=request.user)
         task.title = title
         task.description = description
         task.completed = completed
@@ -94,6 +99,7 @@ def update_task(request):
             status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def delete_task(request):
     serializer = TaskDeleteSerializer(data=request.data)
 
@@ -105,14 +111,14 @@ def delete_task(request):
 
     task_id = serializer.validated_data.get('task_id')
 
-    task_exists = Task.objects.filter(id=task_id).exists()
+    task_exists = Task.objects.filter(id=task_id, owner=request.user).exists()
     if not task_exists:
         return Response(
             {"status": "error", "message": "Task not found"},
             status=status.HTTP_404_NOT_FOUND
         )
     try:
-        task = Task.objects.get(id=task_id)
+        task = Task.objects.get(id=task_id, owner=request.user)
         task.delete()
 
         return Response({

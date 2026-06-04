@@ -65,3 +65,9 @@ class UpdateUserSerializer(serializers.Serializer):
 
 class DeleteUserSerializer(serializers.Serializer):
     user_id = serializers.IntegerField(required=True)
+class RegisterUserSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True, max_length=150)
+    first_name = serializers.CharField(required=False, allow_blank=True, default="")
+    last_name = serializers.CharField(required=False, allow_blank=True, default="")
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(required=True, write_only=True, min_length=6)

@@ -1,14 +1,14 @@
 from django.shortcuts import render
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from user_management.api_helpers.user_helpers import (create_user_helper, update_user_helper, delete_user_helper,
                                                     assign_manager, update_assign_manager)
 from user_management.models import UserRole
-from user_management.serializers.base_serilaizers import CreateUserSerializer, UpdateUserSerializer, DeleteUserSerializer, User
-from user_management.serializers.model_serializers import CurrentUserSerializer, UserReadSerializer
+from user_management.serializers.base_serilaizers import CreateUserSerializer, RegisterUserSerializer, UpdateUserSerializer, DeleteUserSerializer, User
+from user_management.serializers.model_serializers import CurrentUserSerializer, UserReadSerializer, UserRegisterSerializer
 
 # Create your views here.
 @api_view(["GET"])
@@ -225,3 +225,53 @@ def delete_user(request):
             "status": "error",
             "message": str(e),},
             status=status.HTTP_400_BAD_REQUEST,)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def register_user(request):
+    serializer = RegisterUserSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "status": "error",
+            "message": serializer.errors,
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    username = serializer.validated_data.get("username")
+    first_name = serializer.validated_data.get("first_name", "")
+    last_name = serializer.validated_data.get("last_name", "")
+    email = serializer.validated_data.get("email")
+    password = serializer.validated_data.get("password")
+
+    if User.objects.filter(username=username).exists():
+        return Response({
+            "status": "error",
+            "message": "A user with this username already exists.",
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(email=email).exists():
+        return Response({
+            "status": "error",
+            "message": "A user with this email already exists.",
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.create_user(
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            password=password,
+        )
+
+        return Response({
+            "status": "success",
+            "message": "User registered successfully.",
+            "data": UserRegisterSerializer(user).data,
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e),
+        }, status=status.HTTP_400_BAD_REQUEST)

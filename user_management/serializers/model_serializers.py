@@ -50,3 +50,15 @@ class UserReadSerializer(serializers.ModelSerializer):
         if obj.manager:
             return obj.manager.get_full_name() or obj.manager.username
         return None
+class UserRegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6)
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "password",
+        ]
